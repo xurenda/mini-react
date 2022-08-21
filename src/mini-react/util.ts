@@ -6,6 +6,28 @@ export function isEventProp(propKey: string) {
   return propKey.startsWith('on')
 }
 
+export function createDOM(fiber: Fiber): HTMLElement | Text {
+  switch (fiber.type) {
+    case 'ROOT': {
+      throw new Error('should not create the ROOT DOM!')
+    }
+    case 'TEXT_ELEMENT': {
+      const node = document.createTextNode('')
+      node['nodeValue'] = (fiber.props as TextElementProps).nodeValue
+      return node
+    }
+    default: {
+      const node = document.createElement(fiber.type) as HTMLElement
+      Object.keys(fiber.props)
+        .filter(isNotChildrenProps)
+        .forEach(prop => {
+          addDOMProp(node, prop, (fiber.props as Record<string, any>)[prop])
+        })
+      return node
+    }
+  }
+}
+
 export function updateDOM(dom: HTMLElement, oldProps: ElementProps, newProps: ElementProps) {
   Object.keys(oldProps)
     .filter(isNotChildrenProps)
@@ -24,7 +46,7 @@ export function addDOMProp(dom: HTMLElement, propKey: string, propVal: any) {
   if (isEventProp(propKey)) {
     ;(dom as any)[propKey.toLowerCase()] = propVal
   } else {
-    dom.setAttribute(propKey, propVal)
+    ;(dom as any)[propKey] = propVal
   }
 }
 
@@ -32,6 +54,6 @@ export function removeDOMProp(dom: HTMLElement, propKey: string) {
   if (isEventProp(propKey)) {
     ;(dom as any)[propKey.toLowerCase()] = null
   } else {
-    dom.removeAttribute(propKey)
+    ;(dom as any)[propKey] = null
   }
 }

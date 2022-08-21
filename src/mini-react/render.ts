@@ -1,4 +1,4 @@
-import { addDOMProp, isNotChildrenProps, updateDOM } from './util'
+import { addDOMProp, createDOM, isNotChildrenProps, updateDOM } from './util'
 
 const scheduler: Scheduler = {
   nextUnitOfWork: null,
@@ -153,22 +153,5 @@ function reconcileChildren(wipFiber: Fiber, nodes: ReactNode[]) {
 
     pervSibling = newFiber
     idx++
-  }
-}
-
-function createDOM(fiber: Fiber): HTMLElement | Text {
-  switch (fiber.type) {
-    case 'ROOT':
-      throw new Error('should not create the ROOT DOM!')
-    case 'TEXT_ELEMENT':
-      return document.createTextNode((fiber.props as TextElementProps).nodeValue)
-    default:
-      const node = document.createElement(fiber.type) as HTMLElement
-      Object.keys(fiber.props)
-        .filter(isNotChildrenProps)
-        .forEach(prop => {
-          addDOMProp(node, prop, (fiber.props as Record<string, any>)[prop])
-        })
-      return node
   }
 }
