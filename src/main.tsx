@@ -1,10 +1,19 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import './index.css'
+const element = {
+  type: 'h1',
+  props: {
+    title: 'hello world',
+    children: 'Hello World!',
+  },
+}
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-)
+const container: HTMLDivElement = document.querySelector('#root')!
+
+const node = document.createElement(element.type)
+node['title'] = element.props.title
+const textNode = document.createTextNode('')
+textNode['nodeValue'] = element.props.children
+
+node.appendChild(textNode)
+container.appendChild(node)
+
+export {}
