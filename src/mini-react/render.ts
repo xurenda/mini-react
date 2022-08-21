@@ -10,7 +10,7 @@ export default function render(element: ReactNode, container: HTMLElement) {
     Object.keys(element.props)
       .filter(isNotChildrenProps)
       .forEach(prop => {
-        ;(node as HTMLElement).setAttribute(prop, (element.props as any)[prop])
+        ;(node as HTMLElement).setAttribute(prop, (element.props as Record<string, any>)[prop])
       })
 
     element.props.children.forEach(child => render(child, node as HTMLElement))
