@@ -2,10 +2,11 @@ import { isNotChildrenProps } from './util'
 
 const scheduler: Scheduler = {
   nextUnitOfWork: null,
+  wipRoot: null,
 }
 
 export default function render(element: ReactNode, container: HTMLElement) {
-  scheduler.nextUnitOfWork = {
+  const rootFiber: Fiber = {
     type: 'ROOT',
     props: {
       children: [element],
@@ -16,19 +17,24 @@ export default function render(element: ReactNode, container: HTMLElement) {
     parent: null,
   }
 
-  workLoop(scheduler.nextUnitOfWork)
+  scheduler.nextUnitOfWork = scheduler.wipRoot = rootFiber
+  workLoop()
 }
 
-function workLoop(nextUnitOfWork: Scheduler['nextUnitOfWork']) {
+function workLoop() {
   function loop(deadline: IdleDeadline) {
     let shouldYield = false
 
-    while (nextUnitOfWork && !shouldYield) {
-      nextUnitOfWork = performUnitWork(nextUnitOfWork)
+    while (scheduler.nextUnitOfWork && !shouldYield) {
+      scheduler.nextUnitOfWork = performUnitWork(scheduler.nextUnitOfWork)
 
       if (deadline.timeRemaining() < 1) {
         shouldYield = true
       }
+    }
+
+    if (scheduler.wipRoot && !scheduler.nextUnitOfWork) {
+      commitRoot()
     }
 
     window.requestIdleCallback(loop)
@@ -42,12 +48,7 @@ function performUnitWork(fiber: Fiber): Scheduler['nextUnitOfWork'] {
     fiber.dom = createDOM(fiber)
   }
 
-  if (fiber.parent) {
-    fiber.parent.dom!.appendChild(fiber.dom)
-  }
-
   const nodes = fiber.props.children
-
   for (let idx = 0, pervSibling: Fiber | null = null; idx < nodes.length; idx++) {
     const node = nodes[idx]
 
@@ -69,17 +70,7 @@ function performUnitWork(fiber: Fiber): Scheduler['nextUnitOfWork'] {
     pervSibling = newFiber
   }
 
-  if (fiber.child) {
-    return fiber.child
-  }
-  let nextFiber: Fiber | null = fiber
-  while (nextFiber) {
-    if (nextFiber.sibling) {
-      return nextFiber.sibling
-    }
-    nextFiber = nextFiber.parent
-  }
-  return null
+  return findNextFiber(fiber)
 }
 
 function createDOM(fiber: Fiber): HTMLElement {
@@ -101,4 +92,31 @@ function createDOM(fiber: Fiber): HTMLElement {
   }
 
   return node as HTMLElement
+}
+
+function commitRoot() {
+  function commitWork(fiber: Fiber | null) {
+    if (!fiber) return
+
+    fiber.parent!.dom!.appendChild(fiber.dom!)
+
+    commitWork(findNextFiber(fiber))
+  }
+
+  commitWork(scheduler.wipRoot!.child)
+  scheduler.wipRoot = null
+}
+
+function findNextFiber(fiber: Fiber): Fiber | null {
+  if (fiber.child) {
+    return fiber.child
+  }
+  let nextFiber: Fiber | null = fiber
+  while (nextFiber) {
+    if (nextFiber.sibling) {
+      return nextFiber.sibling
+    }
+    nextFiber = nextFiber.parent
+  }
+  return null
 }

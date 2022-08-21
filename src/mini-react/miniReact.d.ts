@@ -23,7 +23,8 @@ interface ReactTextNode extends ReactNode {
 
 // --------------
 interface Scheduler {
-  nextUnitOfWork: Fiber | null
+  nextUnitOfWork: Fiber | null // 下一个工作
+  wipRoot: Fiber | null // 正在进行的工作的 root
 }
 
 interface Fiber extends ReactNode {
