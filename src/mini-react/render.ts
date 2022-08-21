@@ -1,8 +1,10 @@
-import { isNotChildrenProps } from './util'
+import { addDOMProp, isNotChildrenProps, updateDOM } from './util'
 
 const scheduler: Scheduler = {
   nextUnitOfWork: null,
   wipRoot: null,
+  pervRoot: null,
+  deletions: [],
 }
 
 export default function render(element: ReactNode, container: HTMLElement) {
@@ -15,6 +17,7 @@ export default function render(element: ReactNode, container: HTMLElement) {
     child: null,
     sibling: null,
     parent: null,
+    alternate: scheduler.pervRoot,
   }
 
   scheduler.nextUnitOfWork = scheduler.wipRoot = rootFiber
@@ -45,65 +48,40 @@ function workLoop() {
 
 function performUnitWork(fiber: Fiber): Scheduler['nextUnitOfWork'] {
   if (!fiber.dom) {
-    fiber.dom = createDOM(fiber)
+    fiber.dom = createDOM(fiber) as unknown as HTMLElement
   }
 
   const nodes = fiber.props.children
-  for (let idx = 0, pervSibling: Fiber | null = null; idx < nodes.length; idx++) {
-    const node = nodes[idx]
-
-    const newFiber: Fiber = {
-      type: node.type,
-      props: node.props,
-      dom: null,
-      parent: fiber,
-      child: null,
-      sibling: null,
-    }
-
-    if (idx === 0) {
-      fiber.child = newFiber
-    } else {
-      pervSibling!.sibling = newFiber
-    }
-
-    pervSibling = newFiber
-  }
+  reconcileChildren(fiber, nodes)
 
   return findNextFiber(fiber)
-}
-
-function createDOM(fiber: Fiber): HTMLElement {
-  let node: HTMLElement | Text
-  switch (fiber.type) {
-    case 'ROOT':
-      throw new Error('should not create the ROOT DOM!')
-    case 'TEXT_ELEMENT':
-      node = document.createTextNode((fiber.props as TextElementProps).nodeValue)
-      break
-    default:
-      node = document.createElement(fiber.type)
-      Object.keys(fiber.props)
-        .filter(isNotChildrenProps)
-        .forEach(prop => {
-          ;(node as HTMLElement).setAttribute(prop, (fiber.props as Record<string, any>)[prop])
-        })
-      break
-  }
-
-  return node as HTMLElement
 }
 
 function commitRoot() {
   function commitWork(fiber: Fiber | null) {
     if (!fiber) return
 
-    fiber.parent!.dom!.appendChild(fiber.dom!)
+    const parentFiber = fiber.parent
+    if (parentFiber?.dom && fiber.dom) {
+      switch (fiber.effectTag) {
+        case 'UPDATE':
+          updateDOM(fiber.dom, fiber.alternate!.props, fiber.props)
+          break
+        case 'ADDED':
+          parentFiber.dom.appendChild(fiber.dom)
+          break
+        case 'DELETE':
+          parentFiber.dom.removeChild(fiber.dom)
+          break
+      }
+    }
 
     commitWork(findNextFiber(fiber))
   }
 
+  scheduler.deletions.forEach(commitWork)
   commitWork(scheduler.wipRoot!.child)
+  scheduler.pervRoot = scheduler.wipRoot
   scheduler.wipRoot = null
 }
 
@@ -119,4 +97,78 @@ function findNextFiber(fiber: Fiber): Fiber | null {
     nextFiber = nextFiber.parent
   }
   return null
+}
+
+function reconcileChildren(wipFiber: Fiber, nodes: ReactNode[]) {
+  let idx: number = 0
+  let oldFiber = wipFiber.alternate?.child || null
+  let pervSibling: Fiber | null = null
+  let newFiber: Fiber | null = null
+
+  while (idx < nodes.length || oldFiber) {
+    const node = nodes[idx]
+
+    const sameType = node && oldFiber && node.type === node.type
+
+    if (!oldFiber && node) {
+      // Added
+      newFiber = {
+        type: node.type,
+        props: node.props,
+        dom: null,
+        parent: wipFiber,
+        sibling: null,
+        child: null,
+        alternate: null,
+        effectTag: 'ADDED',
+      }
+    } else if (oldFiber && !node) {
+      // Delete
+      newFiber = null
+      oldFiber.effectTag = 'DELETE'
+      scheduler.deletions.push(oldFiber)
+    } else if (oldFiber && node) {
+      // update
+      newFiber = {
+        type: node.type,
+        props: node.props,
+        dom: oldFiber.type === node.type ? oldFiber.dom : null,
+        parent: wipFiber,
+        sibling: null,
+        child: null,
+        alternate: oldFiber,
+        effectTag: 'UPDATE',
+      }
+    }
+
+    if (oldFiber) {
+      oldFiber = oldFiber.sibling
+    }
+
+    if (idx === 0) {
+      wipFiber.child = newFiber
+    } else {
+      pervSibling!.sibling = newFiber
+    }
+
+    pervSibling = newFiber
+    idx++
+  }
+}
+
+function createDOM(fiber: Fiber): HTMLElement | Text {
+  switch (fiber.type) {
+    case 'ROOT':
+      throw new Error('should not create the ROOT DOM!')
+    case 'TEXT_ELEMENT':
+      return document.createTextNode((fiber.props as TextElementProps).nodeValue)
+    default:
+      const node = document.createElement(fiber.type) as HTMLElement
+      Object.keys(fiber.props)
+        .filter(isNotChildrenProps)
+        .forEach(prop => {
+          addDOMProp(node, prop, (fiber.props as Record<string, any>)[prop])
+        })
+      return node
+  }
 }

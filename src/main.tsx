@@ -1,10 +1,15 @@
 import miniReact from './mini-react'
 
+let val = ''
+function changeVal(_val: string) {
+  val = _val
+}
+
 const element = miniReact.createElement(
   'div',
-  { title: 'hello world' },
-  miniReact.createElement('h1', { style: 'background-color: pink;' }, 'Hello World!'),
-  miniReact.createElement('a', { href: '//www.baidu.com', target: '_blank' }, '前往百度'),
+  null,
+  miniReact.createElement('input', { type: 'text', oninput: (e: any) => changeVal(e.target?.value || '') }),
+  miniReact.createElement('span', null, val),
 )
 const container: HTMLDivElement = document.querySelector('#root')!
 
